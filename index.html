@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シンガポール所得税シミュレーター — 海外収入の課税判定つき</title>
+<meta name="description" content="シンガポール在住で海外から収入を得た場合の所得税を計算。海外源泉所得の非課税判定、居住者・非居住者の税率差、累進ブラケットの内訳まで確認できるシミュレーター(YA2025基準)。">
+<style>
+  :root {
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --c-net: #2a78d6;      /* 手取り */
+    --c-tax: #e34948;      /* 所得税 */
+    --good: #006300;
+    --warn-bg: rgba(237,161,0,0.10);
+    --warn-bd: #eda100;
+    /* sequential blue (ブラケット内訳) */
+    --seq-650: #104281; --seq-550: #1c5cab; --seq-450: #2a78d6;
+    --seq-350: #5598e7; --seq-300: #6da7ec; --seq-250: #86b6ef;
+    --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --c-net: #3987e5;
+      --c-tax: #e66767;
+      --good: #0ca30c;
+      --warn-bg: rgba(201,133,0,0.15);
+      --warn-bd: #c98500;
+      --seq-650: #86b6ef; --seq-550: #6da7ec; --seq-450: #3987e5;
+      --seq-350: #2a78d6; --seq-300: #256abf; --seq-250: #1c5cab;
+      --accent: #3987e5;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: var(--page); color: var(--text-primary); line-height: 1.6;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 1720px; margin: 0 auto; }
+  header h1 { font-size: 24px; font-weight: 700; }
+  header p.sub { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 20px; }
+  .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .card p.desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; margin-top: 20px; }
+  .grid2 .card { margin-top: 0; }
+  @media (min-width: 1100px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+
+  /* ---- inputs ---- */
+  .controls { display: grid; grid-template-columns: 1fr; gap: 24px 48px; align-items: start; }
+  @media (min-width: 980px) { .controls { grid-template-columns: minmax(340px, 430px) 1fr; } }
+  .sub-row { display: flex; flex-wrap: wrap; gap: 20px 40px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--grid); }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+  .money-input { display: flex; align-items: baseline; gap: 8px; }
+  .money-input .cur { font-size: 15px; color: var(--text-secondary); font-weight: 600; }
+  .money-input input[type="number"] {
+    font-size: 28px; font-weight: 700; width: 170px;
+    font-variant-numeric: tabular-nums;
+    background: transparent; color: var(--text-primary);
+    border: none; border-bottom: 2px solid var(--accent); outline: none; padding: 0 2px 2px;
+  }
+  .jpy-hint { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  input[type="range"] { width: 300px; max-width: 78vw; accent-color: var(--accent); margin-top: 10px; display: block; }
+  .rate-input { font-size: 14px; color: var(--text-secondary); }
+  .rate-input input {
+    font-size: 18px; font-weight: 700; width: 80px; font-variant-numeric: tabular-nums;
+    background: transparent; color: var(--text-primary);
+    border: none; border-bottom: 2px solid var(--baseline); outline: none; text-align: right;
+    padding: 4px 2px;
+  }
+  .seg-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-wrap: wrap; }
+  .seg-toggle button {
+    font-family: inherit; font-size: 13px; padding: 8px 14px; border: none; cursor: pointer;
+    background: transparent; color: var(--text-secondary);
+  }
+  .seg-toggle button.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .radio-cards { display: flex; flex-direction: column; gap: 10px; }
+  .radio-cards button {
+    font-family: inherit; text-align: left; cursor: pointer;
+    background: transparent; color: var(--text-primary);
+    border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 14px;
+  }
+  .radio-cards button.active { border-color: var(--accent); background: rgba(42,120,214,0.08); }
+  .radio-cards .t { font-size: 14px; font-weight: 600; }
+  .radio-cards .d { font-size: 12px; color: var(--text-secondary); }
+
+  /* ---- KPI ---- */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 20px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .kpi .label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+  .kpi .value { font-size: 26px; font-weight: 700; margin-top: 2px; }
+  .kpi .note { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .kpi.hero .value { font-size: 32px; color: var(--accent); }
+
+  /* ---- 判定バナー ---- */
+  .verdict { margin-top: 20px; padding: 14px 18px; border-radius: 10px; font-size: 14px; }
+  .verdict.exempt { border: 1.5px solid var(--good); color: var(--good); background: rgba(12,163,12,0.08); }
+  .verdict.taxable { border: 1.5px solid var(--warn-bd); background: var(--warn-bg); color: var(--text-primary); }
+  .verdict b { font-weight: 700; }
+
+  /* ---- stacked bar ---- */
+  .stack { display: flex; width: 100%; height: 44px; border-radius: 6px; overflow: hidden; background: var(--grid); gap: 2px; margin-top: 6px; }
+  .stack .seg { position: relative; min-width: 0; height: 100%; transition: width .35s cubic-bezier(.4,0,.2,1); }
+  .stack .seg .inlbl {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+    padding-left: 10px; font-size: 12px; line-height: 1.25; color: #fff; pointer-events: none; white-space: nowrap; overflow: hidden;
+  }
+  .stack .seg .inlbl b { font-size: 13px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; }
+  .legend .item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+  .legend .chip { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+  /* ---- bracket bars & table ---- */
+  .hbar-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .hbar { display: grid; grid-template-columns: 200px 1fr 120px; align-items: center; gap: 10px; font-size: 13px; }
+  .hbar .nm { color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+  .hbar .track { height: 16px; position: relative; }
+  .hbar .fill { height: 100%; border-radius: 0 4px 4px 0; border-left: 2px solid var(--baseline); transition: width .35s; }
+  .hbar .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+  @media (max-width: 560px) { .hbar { grid-template-columns: 120px 1fr 90px; } .hbar .nm { font-size: 11px; } }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  th { font-size: 12px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--baseline); }
+  th:first-child, td:first-child { text-align: left; }
+  tr.total td { font-weight: 700; border-top: 2px solid var(--baseline); border-bottom: none; }
+  td .rate { color: var(--text-muted); font-size: 12px; }
+
+  /* ---- 解説 ---- */
+  .rule-list { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+  .rule { border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; }
+  .rule .t { font-size: 14px; font-weight: 700; }
+  .rule .d { font-size: 13px; color: var(--text-secondary); }
+
+  .notes { font-size: 12px; color: var(--text-muted); margin-top: 20px; line-height: 1.8; }
+  .notes ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🇸🇬 シンガポール所得税シミュレーター</h1>
+    <p class="sub">シンガポール在住で海外から収入を得た場合に、税金がいくらかかるか(そもそも課税されるか)をシミュレートします。(YA2025 / 2024年所得 基準の税率)</p>
+  </header>
+
+  <!-- 入力 -->
+  <section class="card">
+    <div class="controls">
+      <div class="field">
+        <label for="incomeNum">年間収入(SGD)</label>
+        <div class="money-input">
+          <span class="cur">S$</span>
+          <input type="number" id="incomeNum" min="0" max="10000000" step="1000" value="120000">
+        </div>
+        <div class="jpy-hint" id="jpyHint">≈ —</div>
+        <input type="range" id="incomeRange" min="0" max="304" step="1" value="120" aria-label="年間収入スライダー">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">〜S$20万: S$1,000刻み / 〜S$200万: S$25,000刻み / それ以降: S$250,000刻み(最大S$1,000万 ≈ 11.5億円)</div>
+        <div class="sub-row">
+          <div class="field" style="margin:0;">
+            <label>為替レート(円/SGD)</label>
+            <div class="rate-input"><input type="number" id="fxRate" min="1" max="500" step="0.1" value="115"> 円</div>
+          </div>
+          <div class="field" style="margin:0;">
+            <label>税務ステータス</label>
+            <div class="seg-toggle" id="resToggle" role="group" aria-label="税務ステータス">
+              <button type="button" data-res="resident" class="active">税務居住者(年183日以上)</button>
+              <button type="button" data-res="nonresident">非居住者</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>収入のタイプ(課税判定のポイント)</label>
+        <div class="radio-cards" id="typeCards">
+          <button type="button" data-type="local-work" class="active">
+            <div class="t">🌏 海外クライアントの仕事をシンガポール国内で行う</div>
+            <div class="d">フリーランス・リモートワーク等。支払元が海外でも「国内で行った業務」の報酬は国内源泉所得として課税されます</div>
+          </button>
+          <button type="button" data-type="employment">
+            <div class="t">🏢 シンガポール企業に雇用されて働く</div>
+            <div class="d">通常の給与所得。累進税率で課税(外国人はCPF加入対象外)</div>
+          </button>
+          <button type="button" data-type="foreign-passive">
+            <div class="t">💼 純粋な海外源泉所得を受け取る(国内での業務なし)</div>
+            <div class="d">海外の賃貸収入・海外事業の配当など、シンガポール国内で業務を行わずに得た所得。個人が受け取る場合は原則非課税です</div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 課税判定バナー -->
+  <div class="verdict" id="verdict">—</div>
+
+  <!-- KPI -->
+  <div class="kpi-row">
+    <div class="kpi hero">
+      <div class="label">手取り額(年)</div>
+      <div class="value" id="kpiNet">—</div>
+      <div class="note" id="kpiNetJpy">—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">所得税</div>
+      <div class="value" id="kpiTax">—</div>
+      <div class="note" id="kpiTaxJpy">—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">実効税率</div>
+      <div class="value" id="kpiEff">—</div>
+      <div class="note">収入全体に対する税の割合</div>
+    </div>
+    <div class="kpi">
+      <div class="label">限界税率</div>
+      <div class="value" id="kpiMarginal">—</div>
+      <div class="note">次の1ドルにかかる税率</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <!-- 内訳 -->
+    <section class="card">
+      <h2>収入の内訳 — 手取りと税金</h2>
+      <p class="desc">年間収入 <span id="grossLabel">—</span> に対する手取りと所得税の割合です。</p>
+      <div class="stack" id="stackBar" role="img" aria-label="手取りと所得税の内訳バー"></div>
+      <div class="legend" id="stackLegend"></div>
+      <table aria-label="税額サマリー">
+        <thead><tr><th>項目</th><th>SGD</th><th>日本円換算</th><th>割合</th></tr></thead>
+        <tbody id="sumTable"></tbody>
+      </table>
+      <div id="cpfNote" style="font-size:12px;color:var(--text-muted);margin-top:10px;">
+        ※ 外国人(就労ビザ保有者)はCPF(公的年金)の加入対象外のため、給与からの社会保険料控除はありません。市民・永住権者はCPF拠出(本人20%/雇用主17%、55歳以下)が別途あります。
+      </div>
+    </section>
+
+    <!-- ブラケット内訳 -->
+    <section class="card" id="bracketCard">
+      <h2>累進ブラケットの内訳 — どの帯にいくら課税されている?</h2>
+      <p class="desc">シンガポールの居住者税率は0%から始まる累進構造です。帯ごとの税額を表示します。</p>
+      <div class="hbar-list" id="bracketBars"></div>
+      <table aria-label="ブラケット別税額表">
+        <thead><tr><th>課税所得の帯(SGD)</th><th>税率</th><th>この帯の課税額</th><th>税額</th></tr></thead>
+        <tbody id="bracketTable"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <!-- 制度解説 -->
+  <section class="card">
+    <h2>海外収入とシンガポール課税の基本ルール</h2>
+    <div class="rule-list">
+      <div class="rule">
+        <div class="t">属地主義(Territorial Basis)</div>
+        <div class="d">シンガポールは「シンガポール国内で生じた所得」と「国外所得のうちシンガポールで受領されたもの」に課税します。ただし個人が受け取る海外源泉所得は2004年以降原則非課税(パートナーシップ経由を除く)。キャピタルゲイン税もありません。</div>
+      </div>
+      <div class="rule">
+        <div class="t">⚠️ よくある誤解 — 「海外クライアントだから非課税」ではない</div>
+        <div class="d">所得の源泉地は「支払元の国」ではなく「業務を行った場所」で判定されます。シンガポールに住みながらリモートで海外の仕事をした報酬は国内源泉所得となり、通常どおり課税されます。</div>
+      </div>
+      <div class="rule">
+        <div class="t">居住者と非居住者で税率が変わる</div>
+        <div class="d">暦年183日以上の滞在等で税務居住者となり、0〜24%の累進税率が適用されます。非居住者の給与所得は「一律15%か居住者税率のどちらか高い方」、事業所得・役員報酬等は一律24%です。</div>
+      </div>
+      <div class="rule">
+        <div class="t">日本側の税務も要確認</div>
+        <div class="d">日本の非居住者となっていない場合(生活の本拠が日本にあると判定される場合)は日本でも課税され得ます。出国時の国外転出時課税(含み益1億円以上の有価証券等)にも注意してください。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 前提 -->
+  <section class="notes">
+    <strong>前提・注意事項</strong>
+    <ul>
+      <li>YA2025(2024年所得)時点の税率表に基づく概算です。YA2024で実施された税額の一部リベート等は反映していません。</li>
+      <li>控除(Reliefs)は勤労所得控除S$1,000のみ反映した簡易計算です。扶養控除・CPF関連控除・保険料控除等で実際の税額はさらに下がる場合があります。</li>
+      <li>事業所得の場合は経費控除後の純利益を「年間収入」に入力してください。</li>
+      <li>GST(消費税)登録義務(課税売上S$100万超)、法人設立した場合の法人税(17%)は対象外です。</li>
+      <li>実際の課税判定(源泉地・居住性・租税条約)は個別事情によります。正確な判断はIRASまたは税理士にご確認ください。</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+/* ========== シンガポール所得税(YA2025 居住者累進税率) ========== */
+const BRACKETS = [
+  { size: 20000,  rate: 0     },
+  { size: 10000,  rate: 0.02  },
+  { size: 10000,  rate: 0.035 },
+  { size: 40000,  rate: 0.07  },
+  { size: 40000,  rate: 0.115 },
+  { size: 40000,  rate: 0.15  },
+  { size: 40000,  rate: 0.18  },
+  { size: 40000,  rate: 0.19  },
+  { size: 40000,  rate: 0.195 },
+  { size: 40000,  rate: 0.20  },
+  { size: 180000, rate: 0.22  },
+  { size: 500000, rate: 0.23  },
+  { size: Infinity, rate: 0.24 },
+];
+const EARNED_INCOME_RELIEF = 1000; // 55歳未満の勤労所得控除
+const NON_RESIDENT_EMPLOYMENT_FLAT = 0.15;
+const NON_RESIDENT_OTHER_FLAT = 0.24;
+
+function residentTax(chargeable) {
+  let remaining = chargeable, tax = 0;
+  const rows = [];
+  let floor = 0;
+  for (const b of BRACKETS) {
+    if (remaining <= 0) break;
+    const amt = Math.min(remaining, b.size);
+    const t = amt * b.rate;
+    rows.push({ from: floor, to: floor + amt, rate: b.rate, amount: amt, tax: t, full: b.size });
+    tax += t;
+    remaining -= amt;
+    floor += b.size;
+  }
+  return { tax, rows };
+}
+
+function marginalRate(chargeable) {
+  let floor = 0;
+  for (const b of BRACKETS) {
+    if (chargeable < floor + b.size) return b.rate;
+    floor += b.size;
+  }
+  return BRACKETS[BRACKETS.length - 1].rate;
+}
+
+function calc(income, type, isResident) {
+  if (type === "foreign-passive") {
+    return { taxable: false, tax: 0, chargeable: 0, rows: [], marginal: 0, method: "海外源泉所得(個人受領)— 非課税" };
+  }
+  if (!isResident) {
+    if (type === "employment") {
+      // 一律15% と 居住者税率(控除なし) の高い方
+      const flat = income * NON_RESIDENT_EMPLOYMENT_FLAT;
+      const prog = residentTax(income).tax;
+      const tax = Math.max(flat, prog);
+      return { taxable: true, tax, chargeable: income, rows: [], marginal: flat >= prog ? NON_RESIDENT_EMPLOYMENT_FLAT : marginalRate(income),
+               method: flat >= prog ? "非居住者: 給与に一律15%(居住者税率より高い方を適用)" : "非居住者: 居住者税率を適用(一律15%より高いため)" };
+    }
+    return { taxable: true, tax: income * NON_RESIDENT_OTHER_FLAT, chargeable: income, rows: [], marginal: NON_RESIDENT_OTHER_FLAT,
+             method: "非居住者: 事業所得等に一律24%" };
+  }
+  const chargeable = Math.max(0, income - EARNED_INCOME_RELIEF);
+  const { tax, rows } = residentTax(chargeable);
+  return { taxable: true, tax, chargeable, rows, marginal: marginalRate(chargeable),
+           method: "居住者累進税率 0〜24%(勤労所得控除S$1,000適用後)" };
+}
+
+/* ========== スライダー3段階スケール ========== */
+/* index 0..200 → S$0〜20万 (1,000刻み) / 201..272 → 20万〜200万 (25,000刻み) / 273..304 → 200万〜1,000万 (250,000刻み) */
+const BREAK1_IDX = 200; // S$200,000
+const BREAK2_IDX = 272; // S$2,000,000
+const sliderToSgd = i => {
+  i = Number(i);
+  if (i <= BREAK1_IDX) return i * 1000;
+  if (i <= BREAK2_IDX) return 200000 + (i - BREAK1_IDX) * 25000;
+  return 2000000 + (i - BREAK2_IDX) * 250000;
+};
+const sgdToSlider = v => {
+  if (v <= 200000) return Math.round(v / 1000);
+  if (v <= 2000000) return BREAK1_IDX + Math.round((v - 200000) / 25000);
+  return BREAK2_IDX + Math.round((v - 2000000) / 250000);
+};
+
+/* ========== 表示 ========== */
+const $ = id => document.getElementById(id);
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtSgd = v => "S$" + Math.round(v).toLocaleString("en-SG");
+function fmtJpy(v) {
+  if (v >= 100000000) return (v / 100000000).toLocaleString("ja-JP", { maximumFractionDigits: 2 }) + "億円";
+  if (v >= 10000) return (v / 10000).toLocaleString("ja-JP", { maximumFractionDigits: 1 }) + "万円";
+  return "¥" + Math.round(v).toLocaleString("ja-JP");
+}
+
+function render() {
+  const income = Math.max(0, Math.min(10000000, Number($("incomeNum").value) || 0));
+  const fx = Math.max(1, Number($("fxRate").value) || 115);
+  const isResident = $("resToggle").querySelector("button.active").dataset.res === "resident";
+  const type = $("typeCards").querySelector("button.active").dataset.type;
+
+  const r = calc(income, type, isResident);
+  const net = income - r.tax;
+
+  $("jpyHint").textContent = "≈ " + fmtJpy(income * fx) + "(" + fx + "円/SGD)";
+  $("grossLabel").textContent = fmtSgd(income) + "(≈ " + fmtJpy(income * fx) + ")";
+
+  // 判定バナー
+  const v = $("verdict");
+  if (!r.taxable) {
+    v.className = "verdict exempt";
+    v.innerHTML = "✅ <b>この収入はシンガポールでは非課税です。</b>個人が受け取る海外源泉所得(国内で業務を行っていないもの)は課税されません。ただし源泉地国(収入の発生国)や日本側での課税は別途確認が必要です。";
+  } else {
+    v.className = "verdict taxable";
+    v.innerHTML = "⚠️ <b>この収入はシンガポールで課税対象です。</b>適用: " + r.method +
+      (type === "local-work" ? "<br><span style='font-size:12.5px'>支払元が海外でも、シンガポール国内で行った業務の報酬は国内源泉所得として扱われます。</span>" : "");
+  }
+
+  // KPI
+  $("kpiNet").textContent = fmtSgd(net);
+  $("kpiNetJpy").textContent = "≈ " + fmtJpy(net * fx) + " / 月あたり " + fmtSgd(net / 12);
+  $("kpiTax").textContent = fmtSgd(r.tax);
+  $("kpiTaxJpy").textContent = "≈ " + fmtJpy(r.tax * fx);
+  $("kpiEff").textContent = income > 0 ? (r.tax / income * 100).toFixed(1) + "%" : "0%";
+  $("kpiMarginal").textContent = (r.marginal * 100).toFixed(1) + "%";
+
+  // 積み上げバー
+  const segs = [
+    { name: "手取り", val: net,  color: cssVar("--c-net") },
+    { name: "所得税", val: r.tax, color: cssVar("--c-tax") },
+  ].filter(s => s.val > 0);
+  const bar = $("stackBar");
+  bar.innerHTML = "";
+  segs.forEach(s => {
+    const pct = income > 0 ? s.val / income * 100 : 0;
+    const div = document.createElement("div");
+    div.className = "seg";
+    div.style.width = pct + "%";
+    div.style.background = s.color;
+    if (pct > 14) div.innerHTML = `<div class="inlbl"><b>${s.name}</b><span>${pct.toFixed(1)}%</span></div>`;
+    div.title = `${s.name}: ${fmtSgd(s.val)}(${pct.toFixed(1)}%)`;
+    bar.appendChild(div);
+  });
+  $("stackLegend").innerHTML = segs.map(s =>
+    `<span class="item"><span class="chip" style="background:${s.color}"></span>${s.name}</span>`).join("");
+
+  // サマリー表
+  $("sumTable").innerHTML = `
+    <tr><td>年間収入</td><td>${fmtSgd(income)}</td><td>${fmtJpy(income * fx)}</td><td>100%</td></tr>
+    <tr><td>所得税</td><td>${fmtSgd(r.tax)}</td><td>${fmtJpy(r.tax * fx)}</td><td>${income > 0 ? (r.tax / income * 100).toFixed(2) : 0}%</td></tr>
+    <tr class="total"><td style="color:${cssVar("--c-net")}">手取り</td>
+      <td style="color:${cssVar("--c-net")}">${fmtSgd(net)}</td>
+      <td style="color:${cssVar("--c-net")}">${fmtJpy(net * fx)}</td>
+      <td style="color:${cssVar("--c-net")}">${income > 0 ? (net / income * 100).toFixed(2) : 100}%</td></tr>`;
+
+  // ブラケット内訳
+  const card = $("bracketCard");
+  if (r.rows.length > 0) {
+    card.style.display = "";
+    const maxTax = Math.max(...r.rows.map(x => x.tax), 1);
+    const seq = ["--seq-250", "--seq-300", "--seq-350", "--seq-450", "--seq-550", "--seq-650"];
+    $("bracketBars").innerHTML = r.rows.map((row, i) => {
+      const col = cssVar(seq[Math.min(Math.floor(i / r.rows.length * seq.length), seq.length - 1)]);
+      const label = row.full === Infinity ? `S$${(row.from/1000)}k超` : `S$${row.from/1000}k〜${row.to/1000}k`;
+      return `<div class="hbar">
+        <span class="nm">${label} <span style="color:var(--text-muted)">(${(row.rate*100).toFixed(1)}%)</span></span>
+        <div class="track"><div class="fill" style="width:${(row.tax / maxTax * 100).toFixed(1)}%;background:${col}"></div></div>
+        <span class="val">${fmtSgd(row.tax)}</span>
+      </div>`;
+    }).join("");
+    $("bracketTable").innerHTML = r.rows.map(row => `
+      <tr>
+        <td>${row.full === Infinity ? fmtSgd(row.from) + " 超" : fmtSgd(row.from) + " 〜 " + fmtSgd(row.from + row.full)}</td>
+        <td><span class="rate">${(row.rate * 100).toFixed(1)}%</span></td>
+        <td>${fmtSgd(row.amount)}</td>
+        <td>${fmtSgd(row.tax)}</td>
+      </tr>`).join("") + `
+      <tr class="total"><td>合計(課税所得 ${fmtSgd(r.chargeable)})</td><td></td><td></td><td>${fmtSgd(r.tax)}</td></tr>`;
+  } else {
+    card.style.display = "none";
+  }
+}
+
+/* ========== イベント ========== */
+$("incomeNum").addEventListener("input", () => {
+  $("incomeRange").value = sgdToSlider(Math.max(0, Math.min(10000000, Number($("incomeNum").value) || 0)));
+  render();
+});
+$("incomeRange").addEventListener("input", () => {
+  $("incomeNum").value = sliderToSgd($("incomeRange").value);
+  render();
+});
+$("fxRate").addEventListener("input", render);
+$("resToggle").addEventListener("click", e => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  $("resToggle").querySelectorAll("button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  render();
+});
+$("typeCards").addEventListener("click", e => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  $("typeCards").querySelectorAll("button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  render();
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+
+render();
+</script>
+</body>
+</html>
